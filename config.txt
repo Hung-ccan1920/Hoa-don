@@ -1,0 +1,4 @@
+API key: AIzaSyAYOKXi5ziZ33TMziYo_PJt-gQa9M6-KRw, AIzaSyAoCZ1pAmV3cpbL6Sj7fyVgxIv2_VpiN88, AIzaSyBcIDc39PVXF5c2ZI_qQWCHooF9c6jGtSU, AIzaSyAUs_IRF-GWtclHKVyJdAcuRKXjH_pR60g
+Excel: F:\OneDrive\Python\02. Big project\dist\Hóa đơn.xlsm
+username: hung.ledinh
+password: ENCVm5seGNkcmtqaDA4MTkh

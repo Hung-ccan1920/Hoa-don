@@ -1,0 +1,17 @@
+# Thư mục build và dist do PyInstaller tạo ra
+/dist/
+/build/
+
+# Các file tạm của Python
+__pycache__/
+*.pyc
+
+# Các file cấu hình của PyInstaller
+*.spec
+
+# Các file thực thi (exe)
+*.exe
+
+# Các file excel
+*.xlsx
+*.xlsm
