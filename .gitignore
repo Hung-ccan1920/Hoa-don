@@ -15,3 +15,6 @@ __pycache__/
 # Các file excel
 *.xlsx
 *.xlsm
+
+# File cấu hình
+config.txt
