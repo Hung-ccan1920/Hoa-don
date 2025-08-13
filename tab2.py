@@ -1,6 +1,8 @@
+from web_driver_manager import WebDriverManager
+from ai_manager import AIManager
+
 import os
 import utils
-import password_manager
 
 from collections import OrderedDict
 import pandas as pd
@@ -23,110 +25,90 @@ from pathlib import Path
 
 from collections import defaultdict
 
-import pyperclip
+import easyocr
 
+# --- Biến toàn cục ---
 HD_info_list = defaultdict()
-
 is_write_excel = False
 is_sub_window_open = False
-is_web_opened = False
-df = pd.DataFrame()
-
 excel_file = None
+df = pd.DataFrame()
+web_driver = None
 
 
-def import_HD(window, label):
-  global is_write_excel, HD_info_list
+def import_HD(window, label, config):
+    global is_write_excel, HD_info_list
 
-  file_paths = filedialog.askopenfilenames(
-      initialdir="/",
-      title="Chọn HÓa đơn PDF",
-      filetypes=( ("PDF or XML files", "*.pdf *.xml"), )
-  )
-  if len(file_paths)>0:
-    label.config(text='')  # Xóa nội dung label
-    HD_info_list = [] # Xóa nội dung
+    file_paths = filedialog.askopenfilenames(
+        initialdir="/",
+        title="Select PDF or XML Invoices",
+        filetypes=(("PDF or XML files", "*.pdf *.xml"),)
+    )
+    if not file_paths: return
 
-    utils.update_label(window, label,'Hóa đơn đã được import: ')
+    label.config(text='')
+    HD_info_list = []
+
+    utils.update_label(window, label, 'Invoices Imported: ')
     
-    # HD_info = utils.PDF_file_read(ten_file)
-    # Thứ tự các nhãn mong muốn
     order = ['Goi','SHDong', 'NHDong','MST', 'TgTCThue', 'TgTTTBSo', 'KHHDon', 'SHDon', 'NLap', 'MaTC', 'LinkTC', 'path']
 
+
+    api_keys = config.get('API_KEY')
     for file in file_paths:
-      if '.pdf' in file:
-        HD_info = utils.PDF_file_read(file)
-        # Tìm file xml, nếu không có thì trả về đường dẫn file pdf, để tìm lại sau
-        if path := utils.find_xml_file(file, HD_info):
-          HD_info['path'] = path
-        else:
-          HD_info['path'] = file.replace("/", "\\")
-      else:
-        HD_info = utils.XML_file_read(file, True)
-        HD_info['path'] = file.replace("/", "\\")
+        if '.pdf' in file.lower():
+            pdf_image_path = config.get_temp_file_path('pdf_import.png')
+            HD_info = utils.PDF_file_read(api_keys, file, pdf_image_path)
 
-      if len(HD_info) > 0: 
-         # sắp xếp theo thứ tự order
-        ordered_HD_info = OrderedDict((key, HD_info[key]) for key in order if key in HD_info)
+            xml_path = utils.find_xml_file(file, HD_info)
+            HD_info['path'] = xml_path if xml_path else file.replace("/", "\\")
+        else: # xml file
+            HD_info = utils.XML_file_read(api_keys, file, False)
+            HD_info['path'] = file.replace("/", "\\")
 
-        HD_info_list.append(ordered_HD_info)
-
-        utils.update_label(window, label,f'\n{Path(file).name}')
+        if HD_info:
+            ordered_HD_info = OrderedDict((key, HD_info[key]) for key in order if key in HD_info)
+            HD_info_list.append(ordered_HD_info)
+            utils.update_label(window, label, f'\n{Path(file).name}')
     
-    utils.update_label(window, label,'\n#')
-    
-    # reset lại biến
+    utils.update_label(window, label, '\n#')
     is_write_excel = False
     
-def ghi_excel(window, label):
-    """
-    Ghi nội dung vào file Excel.
-
-    """
-
-    global HD_info_list, is_write_excel, excel_file
-    if not excel_file:
-      excel_file = utils.config_file_value ('Excel')[0]
-
-    if  label.cget("text") == '' or is_write_excel:
+def ghi_excel(window, label, config):
+    global HD_info_list, is_write_excel
+    
+    if label.cget("text") == '' or is_write_excel:
         return
+
+    # <<< THAY ĐỔI: Lấy đường dẫn excel từ ConfigManager
+    excel_file = config.get('excel_path')
 
     try:
-        #kiêm tra file excel tồn tại không
-        # Check if the file exists
-        if not os.path.isfile(excel_file):
-          print(f"File Exxcel not found. Please select an Excel file.")
-        
-          # Create the main tkinter window and hide it
-          root = tk.Tk()
-          root.withdraw()
+        if not excel_file or not os.path.isfile(excel_file):
+            messagebox.showwarning("File Not Found", "Excel file not found. Please select a new one.")
+            new_excel_file = filedialog.askopenfilename(
+                title="Select an Excel File",
+                filetypes=(("Excel files", "*.xlsx *.xls *.xlsm"), ("All files", "*.*"))
+            ).replace("/", "\\")
 
-          # Show an "Open" dialog box and get the path of the selected file
-          excel_file = filedialog.askopenfilename(
-              title="Select an Excel File",
-              filetypes=(
-                  ("Excel files", "*.xlsx *.xls *xlsm"),
-                  ("All files", "*.*"))).replace("/", "\\")
-          if not excel_file:
-             return
+            if not new_excel_file: return
 
-          utils.write_config_file('Excel', excel_file)
+            # <<< THAY ĐỔI: Lưu đường dẫn mới vào config
+            excel_file = new_excel_file
+            config.config['excel_path'] = excel_file
+            config.save_config()
+            messagebox.showinfo("Success", f"New Excel path saved:\n{excel_file}")
 
-        # Mở workbook bằng xlwings. Không cần kiểm tra file có mở hay không
-        wb = xw.Book(excel_file)  # Mở workbook. Nếu file không tồn tại sẽ báo lỗi
-        sheet = wb.sheets.active #lấy sheet hiện tại
-    except FileNotFoundError:
-        messagebox.showerror('Lỗi', f"Không tìm thấy file Excel: {excel_file}")
-        return
-    except Exception as e: # Bắt các lỗi khác nếu có
-        messagebox.showerror("Lỗi", f"Lỗi khi mở file Excel: {e}")
+        wb = xw.Book(excel_file)
+        sheet = wb.sheets.active
+    except Exception as e:
+        messagebox.showerror("Error", f"Could not open Excel file: {e}")
         return
     
     try:
-      last_row = sheet.range("A" + str(sheet.cells.last_cell.row)).end('up').row if sheet.cells.last_cell else 0
+        last_row = sheet.range("A" + str(sheet.cells.last_cell.row)).end('up').row if sheet.cells.last_cell else 0
     except Exception as e:
-      messagebox.showerror("Lỗi", f"Lỗi khi xác định dòng cuối cùng: {e}")
-      return
+        last_row = 0 # Mặc định là 0 nếu sheet trống
 
     empty_columns = ['B', 'C', 'D', 'E', 'F']
 
@@ -137,88 +119,125 @@ def ghi_excel(window, label):
             while True:
                 col_letter = xw.utils.col_name(col_idx)
                 if col_letter not in empty_columns:
-                  try:
                     sheet.cells(last_row, col_idx).value = value
-                  except Exception as e:
-                    messagebox.showerror("Lỗi", f"Lỗi khi ghi dữ liệu vào ô: {e}")
-                    return
-                  col_idx += 1
-                  break
+                    col_idx += 1
+                    break
                 col_idx += 1
 
     is_write_excel = True
 
     try:
-        wb.save() # Lưu file
-        utils.update_label(window, label,'\n--> Xong!')
+        wb.save()
+        utils.update_label(window, label, '\n--> Done!')
     except Exception as e:
-        messagebox.showerror('Lỗi', f"Lỗi khi lưu file Excel: {e}")
-        return
+        messagebox.showerror('Error', f"Could not save Excel file: {e}")
       
 
-def web_open(window, label):
+def web_open(window, label, config):
 
   global excel_file, is_sub_window_open, df
 
-  if not excel_file:
-    excel_file = utils.config_file_value ('Excel')[0]
-  
-  # Kiểm tra cửa sổ đã được mở chưa
-  if is_sub_window_open:
-    return
+  web_driver_manager = WebDriverManager(window, label)
+
+  if is_sub_window_open: return
+
+  excel_file = config.get('excel_path')
+  if not excel_file or not os.path.isfile(excel_file):
+      messagebox.showerror("Error", "Excel file path is not set or invalid. Please check Settings.")
+      return
 
   wb = xw.Book(excel_file)
-  ws = wb.sheets[0]  # Lấy sheet đầu tiên
-  # selected_rows = ws.range('R1').value
+  ws = wb.sheets[0]
   selected_rows = str(ws.range('B1').value).split(',')
 
-  # Lấy tên các cột (từ A đến Q)
-  column_names = [chr(i) for i in range(65, 82)]  # 65 là mã ASCII của 'A', 81 là mã ASCII của 'Q'
-
-  # Lưu thông tin từ cột A đến cột Q của các dòng được chọn vào DataFrame
-  data = []
-  for row_index in selected_rows:
-      row_data = ws.range(f"A{row_index}:Q{row_index}").value  # Lấy dữ liệu từ cột A đến Q
-      data.append(row_data)
-
-  # Tạo DataFrame với column_names làm nhãn và selected_row làm index
+  column_names = [chr(i) for i in range(65, 82)]
+  data = [ws.range(f"A{row_index}:Q{row_index}").value for row_index in selected_rows]
   df = pd.DataFrame(data, columns=column_names, index=selected_rows)
-  
-  # Gán giá trị cho ô rỗng
   df.fillna('', inplace=True)
 
-  utils.update_label(window, label,'Đã lấy dữ liệu từ Excel!',False)
+  utils.update_label(window, label, 'Data loaded from Excel!', False)
 
-  # Chọn password trước khi mở web
-  user, password = create_user_choose_gui()
+# Bỏ đi chức năng chọn nhiều user
+  # user, password = create_user_choose_gui(config) 
+  user = config.get('USERNAME')
+  password = config.get('PASSWORD')
 
-  global is_web_opened
-  try:
-      if not(is_web_opened) or web_driver.title: #Kiểm tra web đã được mở chưa
-          web_driver = utils.initialize_web_driver(window, label)
-          is_web_opened = True
-  except:
-      # khi trang web bị người dùng tắt, web_driver.title sẽ bị lỗi, khởi tạo lại trang web
-      web_driver = utils.initialize_web_driver(window, label)
-      is_web_opened = True
+  if user is None: return
 
-  # Bỏ chế độ ontop khi mở trang web
+  global web_driver
+  if not utils.is_driver_active(web_driver):
+      # Nếu trình duyệt chưa hoạt động (chưa mở hoặc đã đóng), khởi tạo lại
+      web_driver = web_driver_manager.initialize_web_driver()
+      if not web_driver: return # Dừng lại nếu khởi tạo thất bại
+
+  login_url = 'http://10.17.69.56/dang-nhap'
   window.attributes('-topmost', False)
+  web_driver.get(login_url)
 
-  # Mở trang web
-  web_driver.get('http://10.17.69.56/dang-nhap')
+  # Đợi tối đa 30 giây cho đến khi trang tải hoàn toàn
+  WebDriverWait(web_driver, 10).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
-  # Kiểm tra user và password để nhập vào
-  if user and password:
+  # Kiểm tra user và password để nhập, và kiểm tra đã được đăng nhập chưa
+  if user and password and web_driver.current_url == login_url:
+    ai_manager = AIManager(config.get('API_KEY'))
+    is_first_try = True
+    model_directory = os.path.join(utils.get_app_path(), 'easyocr_model')
+    reader = easyocr.Reader(['en'], model_storage_directory=model_directory)
+
     WebDriverWait(web_driver, 10).until(EC.presence_of_element_located(
       (By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div:nth-child(1) > input'))).send_keys(user)
 
-    web_driver.find_element(By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div._c5f7bb96._aeaddae9._f2cdb69f._1b1d59f6._119fcfce._b75720eb._95467085.ng-tns-c55-4 > input').send_keys(password)
+    web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[2]/input').send_keys(password)
 
-    web_driver.find_element(By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div.row.justify-content-center.ng-tns-c55-4 > button').click()
+    # Vòng lặp giải captcha
+    while True:
+        web_element = WebDriverWait(web_driver, 10).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[2]/img')))
+
+        captcha_path = config.get_temp_file_path('captcha.png')
+        web_element.screenshot(captcha_path)
+
+        if is_first_try:
+            result = reader.readtext(captcha_path)
+            response = ''.join([res[1] for res in result])
+            is_first_try = False
+            if not response or len(response) < 4: # Nếu kết quả không đạt, chạy lại vòng lặp
+                continue
+        else:   
+            response = ai_manager.generate_from_image(
+                "Extract all characters from this image (this is a captcha code). Return only the character string, say nothing more.",
+                [captcha_path]
+            )
+
+        if not response:
+            messagebox.showerror("API Error", 'API limit reached or other error occurred.')
+            window.deiconify() # Hiện lại cửa sổ chính
+            break
+
+        utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
+        
+        web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
+
+        try:
+            # đợi spinner tắt
+            WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div/p')))
+            # Đợi nút thoát ở màn hình sau khi đăng nhập thành công
+            WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/app-landing-page/div/div[1]/a')))
+            is_first_try = True # Đặt lại giá trị để sử dụng lần sau
+            break # Thoát khỏi vòng lặp nếu thành công
+        except:      
+            try:
+                # Kiểm tra thông báo lỗi
+                error_message = WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/div[2]'))).text
+                # Nếu là lỗi đăng nhập, thoát khỏi hàm
+                if "đăng nhập" in error_message.lower():
+                    break
+                else:
+                   continue # Nếu không phải lỗi đăng nhập, tiếp tục vòng lặp để thử lại captcha
+            except:
+                pass
 
   # Mở màn hình chọn dòng để update thong tin vao web
-  create_write_web_gui(window,web_driver, selected_rows)
+  create_write_web_gui(window, web_driver, selected_rows)
   is_sub_window_open = True
 
   window.mainloop()
@@ -236,6 +255,7 @@ def create_write_web_gui(main_window, web_driver, rows):
 
     sub_window = tk.Toplevel()  # Sử dụng Toplevel để tạo cửa sổ con
     sub_window.title("Ghi thông tin vào Web TT")
+    utils.center_window(sub_window, 200, 75 + len(rows) * 40)
 
     # Thiết lập dark mode
     sub_window.configure(bg="#2e2e2e")
@@ -266,11 +286,6 @@ def create_write_web_gui(main_window, web_driver, rows):
     update_button = ttk.Button(sub_window, text="Cập nhật", style="TButton", command= lambda: data_insert(web_driver, str(selected_row.get())))
     update_button.grid(row=1, column=0, pady=10, padx=5, sticky="ew")
 
-
-    # Điều chỉnh kích thước cửa sổ ngắn lại theo chiều rộng và tự động tính chiều cao
-    height = 75 + len(rows) * 40
-    sub_window.geometry(utils.window_center_position(300,height))
-
     # Gắn hàm on_closing với sự kiện đóng cửa sổ
     sub_window.protocol("WM_DELETE_WINDOW", lambda: on_closing(main_window, sub_window))
 
@@ -282,19 +297,18 @@ def on_closing(main_window, sub_window):
   sub_window.destroy()
   main_window.deiconify()
 
-def create_user_choose_gui():
+def create_user_choose_gui(config):
     """
-    Tạo giao diện dark mode với các cặp radio button và label, 
-    và nút "chọn user" ở dưới cùng.
+    Tạo giao diện chọn user, lấy thông tin từ ConfigManager
+    """
+    users_str = config.get('USERNAME')
+    passwords_str = config.get('PASSWORD')
 
-    """
-    #Lấy thông tin user từ file config
-    users = utils.config_file_value('username')
-    if not users:
+    if not users_str:
       return None, None
 
-    if len(users) == 1:
-       return users[0], password_manager.decrypt_password(utils.config_file_value('password')[0])
+    if len(users_str) == 1:
+       return users_str[0], passwords_str[0]
        
     window = tk.Toplevel()  # Sử dụng Toplevel để tạo cửa sổ con
     window.title("Chọn user")
@@ -310,14 +324,14 @@ def create_user_choose_gui():
               background=[("active", "#555555"), ("pressed", "#333333")])
 
     # Biến để lưu giá trị của radio button được chọn
-    selected_user = tk.StringVar(value=users[0])
+    selected_user = tk.StringVar(value=users_str[0])
 
     # Tạo frame chứa các radio button và label
     frame_radio = ttk.Frame(window)
     frame_radio.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
     # Tạo các cặp radio button và label
-    for i, user in enumerate(users):
+    for i, user in enumerate(users_str):
         radio_button = ttk.Radiobutton(frame_radio, variable=selected_user, value=user)
         radio_button.grid(row=i, column=0, sticky="w", padx=5, pady=5)
 
@@ -330,7 +344,7 @@ def create_user_choose_gui():
     def on_chon_button_click():
         nonlocal username, password
         username =  selected_user.get()
-        password = utils.config_file_value('password')[users.index(user)]
+        password = passwords_str[users_str.index(username)]
         done.set(True)
         window.destroy()
 
@@ -341,8 +355,8 @@ def create_user_choose_gui():
 
 
     # Điều chỉnh kích thước cửa sổ ngắn lại theo chiều rộng và tự động tính chiều cao
-    height = 75 + len(users) * 40
-    window.geometry(utils.window_center_position(200,height))
+    height = 75 + len(users_str) * 40
+    utils.center_window(window, 200, height)
 
     # Khởi tạo biến user và password
     username = None
@@ -360,7 +374,7 @@ def create_user_choose_gui():
     # window.mainloop()
     window.wait_variable(done)  # Chờ biến done thay đổi giá trị
 
-    return username, password_manager.decrypt_password(password)  # Trả về user và password sau khi cửa sổ đóng
+    return username, password  # Trả về user và password sau khi cửa sổ đóng
 
 def data_insert(web_driver, row):
   '''Điền thông tin vào web

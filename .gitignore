@@ -18,3 +18,9 @@ __pycache__/
 
 # File cấu hình
 config.txt
+
+# Biến môi trường
+.env
+
+# File txt
+*.txt
