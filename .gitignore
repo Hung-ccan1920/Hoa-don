@@ -27,3 +27,6 @@ config.txt
 
 # File txt
 *.txt
+
+# Thư mục model:
+/easyocr_model/
