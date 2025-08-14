@@ -6,6 +6,9 @@
 __pycache__/
 *.pyc
 
+# Thư mục môi trường ảo
+/.venv/
+
 # Các file cấu hình của PyInstaller
 *.spec
 

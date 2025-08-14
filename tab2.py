@@ -1,5 +1,6 @@
 from web_driver_manager import WebDriverManager
 from ai_manager import AIManager
+from easyOCR_manager import EasyOCRManager
 
 import os
 import utils
@@ -159,8 +160,8 @@ def web_open(window, label, config):
 
 # Bỏ đi chức năng chọn nhiều user
   # user, password = create_user_choose_gui(config) 
-  user = config.get('USERNAME')
-  password = config.get('PASSWORD')
+  user = config.get('COMPANY_USERNAME')
+  password = config.get('COMPANY_PASSWORD')
 
   if user is None: return
 
@@ -179,10 +180,13 @@ def web_open(window, label, config):
 
   # Kiểm tra user và password để nhập, và kiểm tra đã được đăng nhập chưa
   if user and password and web_driver.current_url == login_url:
-    ai_manager = AIManager(config.get('API_KEY'))
-    is_first_try = True
-    model_directory = os.path.join(utils.get_app_path(), 'easyocr_model')
-    reader = easyocr.Reader(['en'], model_storage_directory=model_directory)
+    ai_manager = AIManager(config.get('API_KEY')) 
+    is_try_OCR = True # Biến theo dõi chỉ thử OCR 1 lần nếu thất bại
+    # Khởi tạo EasyOCR
+    easyOCR = EasyOCRManager(['en'],'easyocr_model',False)
+
+    # model_directory = os.path.join(utils.get_app_path(), 'easyocr_model')
+    # reader = easyocr.Reader(['en'], model_storage_directory=model_directory, gpu=False)
 
     WebDriverWait(web_driver, 10).until(EC.presence_of_element_located(
       (By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div:nth-child(1) > input'))).send_keys(user)
@@ -196,17 +200,19 @@ def web_open(window, label, config):
         captcha_path = config.get_temp_file_path('captcha.png')
         web_element.screenshot(captcha_path)
 
-        if is_first_try:
-            result = reader.readtext(captcha_path)
+        if is_try_OCR:
+            is_try_OCR = False
+            result = easyOCR.process_image(captcha_path)
             response = ''.join([res[1] for res in result])
-            is_first_try = False
             if not response or len(response) < 4: # Nếu kết quả không đạt, chạy lại vòng lặp
                 continue
+            print(f"Captcha OCR result: {response}")
         else:   
             response = ai_manager.generate_from_image(
                 "Extract all characters from this image (this is a captcha code). Return only the character string, say nothing more.",
                 [captcha_path]
             )
+            print(f"Captcha AI result: {response}")
 
         if not response:
             messagebox.showerror("API Error", 'API limit reached or other error occurred.')
@@ -215,14 +221,13 @@ def web_open(window, label, config):
 
         utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
         
-        web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
-
         try:
+            web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
             # đợi spinner tắt
             WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div/p')))
             # Đợi nút thoát ở màn hình sau khi đăng nhập thành công
             WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/app-landing-page/div/div[1]/a')))
-            is_first_try = True # Đặt lại giá trị để sử dụng lần sau
+            is_try_OCR = True # Đặt lại giá trị để sử dụng lần sau
             break # Thoát khỏi vòng lặp nếu thành công
         except:      
             try:
@@ -234,7 +239,7 @@ def web_open(window, label, config):
                 else:
                    continue # Nếu không phải lỗi đăng nhập, tiếp tục vòng lặp để thử lại captcha
             except:
-                pass
+                break # Nếu không có thông báo lỗi, thoát khỏi vòng lặp
 
   # Mở màn hình chọn dòng để update thong tin vao web
   create_write_web_gui(window, web_driver, selected_rows)

@@ -112,6 +112,17 @@ def create_gui(version, config):
     def on_closing(win):
         # Gọi hàm dọn dẹp tập trung từ ConfigManager
         config.cleanup_temp_dir()
+        
+        # Tắt web driver
+        try:
+            if tab1.web_driver and tab1.web_driver.quit:
+                tab1.web_driver.quit()
+                print("Web driver on tab 1 closed successfully.")
+            if tab2.web_driver and tab2.web_driver.quit:
+                tab2.web_driver.quit()
+                print("Web driver on tab 2 closed successfully.")
+        except Exception as e:
+            print(f"Error closing web driver: {e}")
         win.destroy()
 
     window.protocol("WM_DELETE_WINDOW", lambda: on_closing(window))

@@ -35,13 +35,13 @@ class ConfigManager:
             'required': True, 
             'label': 'API Key'
         },
-        'USERNAME': {
+        'COMPANY_USERNAME': {
             'storage': 'env', 
             'default': None, 
             'required': False, 
             'label': 'Username'
         },
-        'PASSWORD': {
+        'COMPANY_PASSWORD': {
             'storage': 'env', 
             'default': None, 
             'required': False, 
@@ -207,7 +207,7 @@ class ConfigManager:
             entry.pack(side="left", expand=True, fill="x")
             entry_widgets[key] = entry
         
-        ttk.Button(window, text="Save and Exit", style="Dark.TButton", command=save_values).pack(pady=20)
+        ttk.Button(window, text="Save", style="Dark.TButton", command=save_values).pack(pady=10)
         window.mainloop()
 
     def _choose_file(self, entry_widget, file_types):
