@@ -35,13 +35,13 @@ class ConfigManager:
             'required': True, 
             'label': 'API Key'
         },
-        'USERNAME': {
+        'COMPANY_USERNAME': {
             'storage': 'env', 
             'default': None, 
             'required': False, 
             'label': 'Username'
         },
-        'PASSWORD': {
+        'COMPANY_PASSWORD': {
             'storage': 'env', 
             'default': None, 
             'required': False, 
@@ -207,7 +207,7 @@ class ConfigManager:
             entry.pack(side="left", expand=True, fill="x")
             entry_widgets[key] = entry
         
-        ttk.Button(window, text="Save and Exit", style="Dark.TButton", command=save_values).pack(pady=20)
+        ttk.Button(window, text="Save", style="Dark.TButton", command=save_values).pack(pady=10)
         window.mainloop()
 
     def _choose_file(self, entry_widget, file_types):
@@ -217,10 +217,20 @@ class ConfigManager:
             entry_widget.insert(0, file_path)
             
     def _open_api_guide(self):
-        video_path = os.path.join(self._root_dir, "Get API key.mp4")
+        # Tìm video
+        file_name = "Get_API_key.mp4"
+        if getattr(sys, 'frozen', False):
+            app_dir=  os.path.dirname(sys.executable)
+        else:
+            app_dir =  os.path.dirname(os.path.abspath(sys.argv[0]))
+        video_path = os.path.join(app_dir, 'User Guide', file_name)
+        # for root, dirs, files in os.walk(app_dir):
+        #     dirs[:] = [d for d in dirs if not d.startswith('_')] # Bỏ không tìm các  thư mục nội bộ
+        #     if file_name in files:
+        #         video_path = os.path.join(root, file_name)
         if os.path.exists(video_path): webbrowser.open(video_path)
-        else: messagebox.showwarning("Not Found", "File 'Get API key.mp4' was not found.")
-        
+        else: messagebox.showwarning("Not Found", "File 'Get_API_key.mp4' was not found.")
+
     # --- LOGIC MÃ HÓA (Chuyển từ password_manager.py vào thành phương thức private) ---
     def _caesar_cipher(self, text, decrypt=False):
         result = []

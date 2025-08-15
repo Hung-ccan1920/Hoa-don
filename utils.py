@@ -720,6 +720,7 @@ def find_file(file_name):
     """
     app_dir = get_app_path()
     for root, dirs, files in os.walk(app_dir):
+        dirs[:] = [d for d in dirs if not d.startswith('_')] # Bỏ không tìm các  thư mục nội bộ
         if file_name in files:
             return os.path.join(root, file_name)
     return None

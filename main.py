@@ -10,7 +10,7 @@ from tkinter import messagebox
 import threading
 import queue
 
-MAIN_CURRENT_VERSION = "2.9" 
+MAIN_CURRENT_VERSION = "3.0" 
 MAIN_GITHUB_REPO = "Hung-ccan1920/Hoa-don" 
 
 # Chỉ import và sử dụng pyi_splash khi chạy dưới dạng .exe

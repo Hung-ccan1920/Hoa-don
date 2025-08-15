@@ -6,6 +6,7 @@ import webbrowser
 
 from tkinter import ttk
 from tkinter import messagebox
+import os
 
 # Import các lớp cần thiết từ config_manager
 from config_manager import ConfigManager, SettingsWindow
@@ -89,14 +90,14 @@ def create_gui(version, config):
         settings_win.wait_window()
 
     configmenu = tk.Menu(menubar, tearoff=0)
-    configmenu.add_command(label="Settings...", command=open_settings_dialog) # Đổi tên và chức năng
+    configmenu.add_command(label="Settings", command=open_settings_dialog) # Đổi tên và chức năng
     menubar.add_cascade(label="Config", menu=configmenu)
 
     # Menu Help
     def open_user_guide():
-        # Hàm này có thể giữ lại hoặc chuyển vào utils nếu muốn
-        guide_path = utils.find_file('demo.mp4') # Cần truyền config vào find_file
-        if guide_path:
+        # guide_path = utils.find_file('demo.mp4') 
+        guide_path = os.path.join(utils.get_app_path(),'User Guide', 'demo.mp4')
+        if os.path.exists(guide_path):
             webbrowser.open(guide_path)
         else:
             messagebox.showwarning("Not Found", "File 'demo.mp4' was not found.")
@@ -112,6 +113,17 @@ def create_gui(version, config):
     def on_closing(win):
         # Gọi hàm dọn dẹp tập trung từ ConfigManager
         config.cleanup_temp_dir()
+        
+        # Tắt web driver
+        try:
+            if tab1.web_driver and tab1.web_driver.quit:
+                tab1.web_driver.quit()
+                print("Web driver on tab 1 closed successfully.")
+            if tab2.web_driver and tab2.web_driver.quit:
+                tab2.web_driver.quit()
+                print("Web driver on tab 2 closed successfully.")
+        except Exception as e:
+            print(f"Error closing web driver: {e}")
         win.destroy()
 
     window.protocol("WM_DELETE_WINDOW", lambda: on_closing(window))
