@@ -204,6 +204,7 @@ def web_open(window, label, config):
             is_try_OCR = False
             result = easyOCR.process_image(captcha_path)
             response = ''.join([res[1] for res in result]).strip()
+
             if not response or len(response) < 4: # Nếu kết quả không đạt, chạy lại vòng lặp
                 continue
             print(f"Captcha OCR result: {response}")
@@ -212,6 +213,7 @@ def web_open(window, label, config):
                 "Extract all characters from this image (this is a captcha code). Return only the character string, say nothing more.",
                 [captcha_path]
             ).strip()
+
             print(f"Captcha AI result: {response}")
 
         if not response:
@@ -222,7 +224,9 @@ def web_open(window, label, config):
         utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
 
         web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
+
         try:
+            web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
             # đợi spinner tắt
             WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div/p')))
             # Đợi nút thoát ở màn hình sau khi đăng nhập thành công
