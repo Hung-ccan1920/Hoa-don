@@ -26,8 +26,6 @@ from pathlib import Path
 
 from collections import defaultdict
 
-import easyocr
-
 # --- Biến toàn cục ---
 HD_info_list = defaultdict()
 is_write_excel = False
@@ -136,172 +134,193 @@ def ghi_excel(window, label, config):
 
 def web_open(window, label, config):
 
-  global excel_file, is_sub_window_open, df
+    global excel_file, is_sub_window_open, df
 
-  web_driver_manager = WebDriverManager(window, label)
+    web_driver_manager = WebDriverManager(window, label)
 
-  if is_sub_window_open: return
+    if is_sub_window_open: return
 
-  excel_file = config.get('excel_path')
-  if not excel_file or not os.path.isfile(excel_file):
-      messagebox.showerror("Error", "Excel file path is not set or invalid. Please check Settings.")
-      return
+    excel_file = config.get('excel_path')
+    if not excel_file or not os.path.isfile(excel_file):
+        messagebox.showerror("Error", "Excel file path is not set or invalid. Please check Settings.")
+        return
 
-  wb = xw.Book(excel_file)
-  ws = wb.sheets[0]
-  selected_rows = str(ws.range('B1').value).split(',')
+    wb = xw.Book(excel_file)
+    ws = wb.sheets[0]
+    selected_rows = str(ws.range('B1').value).split(',')
 
-  column_names = [chr(i) for i in range(65, 82)]
-  data = [ws.range(f"A{row_index}:Q{row_index}").value for row_index in selected_rows]
-  df = pd.DataFrame(data, columns=column_names, index=selected_rows)
-  df.fillna('', inplace=True)
+    column_names = [chr(i) for i in range(65, 82)]
+    data = [ws.range(f"A{row_index}:Q{row_index}").value for row_index in selected_rows]
+    df = pd.DataFrame(data, columns=column_names, index=selected_rows)
+    df.fillna('', inplace=True)
 
-  utils.update_label(window, label, 'Data loaded from Excel!', False)
+    utils.update_label(window, label, 'Data loaded from Excel!', False)
 
-# Bỏ đi chức năng chọn nhiều user
-  # user, password = create_user_choose_gui(config) 
-  user = config.get('COMPANY_USERNAME')
-  password = config.get('COMPANY_PASSWORD')
+    # Bỏ đi chức năng chọn nhiều user
+    # user, password = create_user_choose_gui(config) 
+    user = config.get('COMPANY_USERNAME')
+    password = config.get('COMPANY_PASSWORD')
 
-  if user is None: return
+    if user is None: return
 
-  global web_driver
-  if not utils.is_driver_active(web_driver):
-      # Nếu trình duyệt chưa hoạt động (chưa mở hoặc đã đóng), khởi tạo lại
-      web_driver = web_driver_manager.initialize_web_driver()
-      if not web_driver: return # Dừng lại nếu khởi tạo thất bại
+    global web_driver
+    if not utils.is_driver_active(web_driver):
+        # Nếu trình duyệt chưa hoạt động (chưa mở hoặc đã đóng), khởi tạo lại
+        web_driver = web_driver_manager.initialize_web_driver()
+        if not web_driver: return # Dừng lại nếu khởi tạo thất bại
 
-  login_url = 'http://10.17.69.56/dang-nhap'
-  window.attributes('-topmost', False)
-  web_driver.get(login_url)
+    login_url = 'http://10.17.69.56/dang-nhap'
+    window.attributes('-topmost', False)
+    web_driver.get(login_url)
 
   # Đợi tối đa 30 giây cho đến khi trang tải hoàn toàn
-  WebDriverWait(web_driver, 10).until(lambda d: d.execute_script("return document.readyState") == "complete")
+    WebDriverWait(web_driver, 10).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
-  # Kiểm tra user và password để nhập, và kiểm tra đã được đăng nhập chưa
-  if user and password and web_driver.current_url == login_url:
-    ai_manager = AIManager(config.get('API_KEY')) 
-    is_try_OCR = True # Biến theo dõi chỉ thử OCR 1 lần nếu thất bại
-    # Khởi tạo EasyOCR
-    easyOCR = EasyOCRManager(['en'],'easyocr_model',False)
+    # Kiểm tra user và password để nhập, và kiểm tra đã được đăng nhập chưa
+    if user and password and web_driver.current_url == login_url:
+        ai_manager = AIManager(config.get('API_KEY')) 
+        is_try_OCR = True # Biến theo dõi chỉ thử OCR 1 lần nếu thất bại
+        # Khởi tạo EasyOCR
+        easyOCR = EasyOCRManager(['en'],'easyocr_model',False)
 
-    # model_directory = os.path.join(utils.get_app_path(), 'easyocr_model')
-    # reader = easyocr.Reader(['en'], model_storage_directory=model_directory, gpu=False)
+        # model_directory = os.path.join(utils.get_app_path(), 'easyocr_model')
+        # reader = easyocr.Reader(['en'], model_storage_directory=model_directory, gpu=False)
 
-    WebDriverWait(web_driver, 10).until(EC.presence_of_element_located(
-      (By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div:nth-child(1) > input'))).send_keys(user)
+        WebDriverWait(web_driver, 10).until(EC.presence_of_element_located(
+        (By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div:nth-child(1) > input'))).send_keys(user)
 
-    web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[2]/input').send_keys(password)
+        web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[2]/input').send_keys(password)
 
-    # Vòng lặp giải captcha
-    while True:
-        web_element = WebDriverWait(web_driver, 10).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[2]/img')))
+        # Vòng lặp giải captcha
+        while True:
+            web_element = WebDriverWait(web_driver, 10).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[2]/img')))
 
-        captcha_path = config.get_temp_file_path('captcha.png')
-        web_element.screenshot(captcha_path)
+            captcha_path = config.get_temp_file_path('captcha.png')
+            web_element.screenshot(captcha_path)
 
-        if is_try_OCR:
-            is_try_OCR = False
-            result = easyOCR.process_image(captcha_path)
-            response = ''.join([res[1] for res in result]).strip()
+            if is_try_OCR:
+                is_try_OCR = False
+                result = easyOCR.process_image(captcha_path)
+                response = ''.join([res[1] for res in result]).strip()
 
-            if not response or len(response) < 4: # Nếu kết quả không đạt, chạy lại vòng lặp
-                continue
-            print(f"Captcha OCR result: {response}")
-        else:   
-            response = ai_manager.generate_from_image(
-                "Extract all characters from this image (this is a captcha code). Return only the character string, say nothing more.",
-                [captcha_path]
-            ).strip()
+                if not response or len(response) < 4: # Nếu kết quả không đạt, chạy lại vòng lặp
+                    continue
+                print(f"Captcha OCR result: {response}")
+            else:   
+                response = ai_manager.generate_from_image(
+                    "Extract all characters from this image (this is a captcha code). Return only the character string, say nothing more.",
+                    [captcha_path]
+                ).strip()
 
-            print(f"Captcha AI result: {response}")
+                print(f"Captcha AI result: {response}")
 
-        if not response:
-            messagebox.showerror("API Error", 'API limit reached or other error occurred.')
-            window.deiconify() # Hiện lại cửa sổ chính
-            break
+            if not response:
+                messagebox.showerror("API Error", 'API limit reached or other error occurred.')
+                window.deiconify() # Hiện lại cửa sổ chính
+                break
 
-        utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
+            utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
 
-        web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
-
-        try:
             web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
-            # đợi spinner tắt
-            WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div/p')))
-            # Đợi nút thoát ở màn hình sau khi đăng nhập thành công
-            WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/app-landing-page/div/div[1]/a')))
-            is_try_OCR = True # Đặt lại giá trị để sử dụng lần sau
-            break # Thoát khỏi vòng lặp nếu thành công
-        except:      
+
             try:
-                # Kiểm tra thông báo lỗi
-                error_message = WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/div[2]'))).text
-                # Nếu là lỗi đăng nhập, thoát khỏi hàm
-                if "đăng nhập" in error_message.lower():
-                    break
-                else:
-                   continue # Nếu không phải lỗi đăng nhập, tiếp tục vòng lặp để thử lại captcha
-            except:
-                break # Nếu không có thông báo lỗi, thoát khỏi vòng lặp
+                web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
+                # đợi spinner tắt
+                WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div/p')))
+                # Đợi nút thoát ở màn hình sau khi đăng nhập thành công
+                WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/app-landing-page/div/div[1]/a')))
+                is_try_OCR = True # Đặt lại giá trị để sử dụng lần sau
+                break # Thoát khỏi vòng lặp nếu thành công
+            except:      
+                try:
+                    # Kiểm tra thông báo lỗi
+                    error_message = WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/div[2]'))).text
+                    # Nếu là lỗi đăng nhập, thoát khỏi hàm
+                    if "đăng nhập" in error_message.lower():
+                        break
+                    else:
+                        continue # Nếu không phải lỗi đăng nhập, tiếp tục vòng lặp để thử lại captcha
+                except:
+                    break # Nếu không có thông báo lỗi, thoát khỏi vòng lặp
 
-  # Mở màn hình chọn dòng để update thong tin vao web
-  create_write_web_gui(window, web_driver, selected_rows)
-  is_sub_window_open = True
+    # Mở màn hình chọn dòng để update thong tin vao web
+    # create_write_web_gui(window, web_driver, selected_rows)
+    # is_sub_window_open = True
 
-  window.mainloop()
+    # 1. Chuẩn bị danh sách items theo đúng định dạng yêu cầu
+    items = []
+    for row in selected_rows:
+        items.append({
+            'display': f"Dòng {row}: {df.at[row, 'A']}", # Văn bản hiển thị
+            'value': str(row)                           # Giá trị trả về (số dòng dạng chuỗi)
+        })
+
+    # 2. Định nghĩa hàm callback (hàm sẽ làm gì sau khi người dùng chọn)
+    #    Hàm data_insert cần web_driver, ta dùng lambda để truyền nó vào.
+    callback = lambda sub_window, selected_row: data_insert(web_driver, sub_window, selected_row)
+
+    # 3. Gọi hàm tạo giao diện chung
+    utils.create_selection_gui(
+        main_window=window,
+        title="Ghi thông tin vào Web TT",
+        items_to_display=items,
+        button_text="Cập nhật",
+        on_confirm_callback=callback
+    )
+    
+    window.mainloop()
 
 
-def create_write_web_gui(main_window, web_driver, rows):
-    """
-    Tạo giao diện dark mode với các cặp radio button và label, 
-    và nút "Cập nhật" ở dưới cùng.
+# def create_write_web_gui(main_window, web_driver, rows):
+#     """
+#     Tạo giao diện dark mode với các cặp radio button và label, 
+#     và nút "Cập nhật" ở dưới cùng.
 
-    Args:
-        rows (list): Danh sách các số dòng.
-    """
-    main_window.withdraw()
+#     Args:
+#         rows (list): Danh sách các số dòng.
+#     """
+#     main_window.withdraw()
 
-    sub_window = tk.Toplevel()  # Sử dụng Toplevel để tạo cửa sổ con
-    sub_window.title("Ghi thông tin vào Web TT")
-    utils.center_window(sub_window, 200, 75 + len(rows) * 40)
+#     sub_window = tk.Toplevel()  # Sử dụng Toplevel để tạo cửa sổ con
+#     sub_window.title("Ghi thông tin vào Web TT")
+#     utils.center_window(sub_window, 200, 75 + len(rows) * 40)
 
-    # Thiết lập dark mode
-    sub_window.configure(bg="#2e2e2e")
-    style = ttk.Style()
-    style.theme_use('clam')
-    style.configure(".", background="#2e2e2e", foreground="white")
-    style.configure("TRadiobutton", background="#2e2e2e", foreground="white", font=("Arial", 10))
-    style.configure("TButton", background="#444444", foreground="white", font=("Arial", 10, "bold"))
-    style.map("TButton",
-              background=[("active", "#555555"), ("pressed", "#333333")])
+#     # Thiết lập dark mode
+#     sub_window.configure(bg="#2e2e2e")
+#     style = ttk.Style()
+#     style.theme_use('clam')
+#     style.configure(".", background="#2e2e2e", foreground="white")
+#     style.configure("TRadiobutton", background="#2e2e2e", foreground="white", font=("Arial", 10))
+#     style.configure("TButton", background="#444444", foreground="white", font=("Arial", 10, "bold"))
+#     style.map("TButton",
+#               background=[("active", "#555555"), ("pressed", "#333333")])
 
-    # Biến để lưu giá trị của radio button được chọn
-    selected_row = tk.IntVar(value=rows[0])
+#     # Biến để lưu giá trị của radio button được chọn
+#     selected_row = tk.IntVar(value=rows[0])
 
-    # Tạo frame chứa các radio button và label
-    frame_radio = ttk.Frame(sub_window)
-    frame_radio.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+#     # Tạo frame chứa các radio button và label
+#     frame_radio = ttk.Frame(sub_window)
+#     frame_radio.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
-    # Tạo các cặp radio button và label
-    for i, row in enumerate(rows):
-        radio_button = ttk.Radiobutton(frame_radio, text=f"Dòng {row}", variable=selected_row, value=row)
-        radio_button.grid(row=i, column=0, sticky="w", padx=5, pady=5)
+#     # Tạo các cặp radio button và label
+#     for i, row in enumerate(rows):
+#         radio_button = ttk.Radiobutton(frame_radio, text=f"Dòng {row}", variable=selected_row, value=row)
+#         radio_button.grid(row=i, column=0, sticky="w", padx=5, pady=5)
 
-        label = ttk.Label(frame_radio, text=df.at[row, 'A'])
-        label.grid(row=i, column=1, sticky="w")
+#         label = ttk.Label(frame_radio, text=df.at[row, 'A'])
+#         label.grid(row=i, column=1, sticky="w")
 
-    # Tạo nút "Cập nhật"
-    update_button = ttk.Button(sub_window, text="Cập nhật", style="TButton", command= lambda: data_insert(web_driver, str(selected_row.get())))
-    update_button.grid(row=1, column=0, pady=10, padx=5, sticky="ew")
+#     # Tạo nút "Cập nhật"
+#     update_button = ttk.Button(sub_window, text="Cập nhật", style="TButton", command= lambda: data_insert(web_driver, str(selected_row.get())))
+#     update_button.grid(row=1, column=0, pady=10, padx=5, sticky="ew")
 
-    # Gắn hàm on_closing với sự kiện đóng cửa sổ
-    sub_window.protocol("WM_DELETE_WINDOW", lambda: on_closing(main_window, sub_window))
+#     # Gắn hàm on_closing với sự kiện đóng cửa sổ
+#     sub_window.protocol("WM_DELETE_WINDOW", lambda: on_closing(main_window, sub_window))
 
-    sub_window.mainloop()
+#     sub_window.mainloop()
 
 def on_closing(main_window, sub_window):
-  global is_sub_window_open, df
+  global is_sub_window_open
   is_sub_window_open = False
   sub_window.destroy()
   main_window.deiconify()
@@ -385,7 +404,7 @@ def create_user_choose_gui(config):
 
     return username, password  # Trả về user và password sau khi cửa sổ đóng
 
-def data_insert(web_driver, row):
+def data_insert(web_driver, sub_window, row):
   '''Điền thông tin vào web
     row: index dòng
   '''
@@ -509,40 +528,28 @@ def data_insert(web_driver, row):
                           "/html/body/app-root/app-main-layout/div/app-pre-file-statement/div[1]/div[2]/app-declare-profile-form/form/div/div[16]/p-tabview/div/div//input[@formcontrolname='secretKey']").send_keys(
                               df.at[row,'O'])
           
-          #bấm nút Download tự đông:
-          # edge_driver.find_element(By.XPATH, 
-          #                         '//*[@id="ui-tabpanel-0"]/div/div/div[4]/div/button[1]').click()
-          
-          # lớp phủ biến mất đi khi tải xong
-          # WebDriverWait(edge_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div[2]')))
-          
           try:
-            # Đợi thông báo lỗi không tải được và bấm tắt thông báo
-            # WebDriverWait(edge_driver, 5).until(EC.visibility_of_element_located((By.XPATH, 
-            #                                                                     "/html/body/app-root/app-main-layout/div/app-pre-file-statement/div[2]/div/app-payment-file-table/p-confirmdialog/div/div/div[1]/div/a"))).click()
             # Kiểm tra đường dẫn file xml có không, k thì thử tìm lại
             xml_path = df.at[row, 'Q']
             if '.xml' not in xml_path:
               xml_path = utils.find_xml_file(xml_path)
 
-            if xml_path:
-              # #bấm nút upload thủ công: 
-              # edge_driver.find_element(By.XPATH, 
-              #                       '//*[@id="ui-tabpanel-0"]/div/div/div[4]/div/button[2]').click()
-              # # Chờ hộp thoại xuất hiện
-              # time.sleep(4)
-              # value_to_copy = xml_path
-              # pyperclip.copy(value_to_copy)
-              # pywinauto.keyboard.send_keys("^v")  # Dán (Ctrl+V)
-              # pywinauto.keyboard.send_keys("{ENTER}")
-
-              #time.sleep(2)
-              
+            if xml_path:            
               # Gán đường dẫn file xml để tải thủ công (nhập thẳng vào thẻ input ẩn)
               web_driver.find_element(By.XPATH, '//*[@id="attch-annex"]').send_keys(xml_path)
+            else:
+                # Nếu không có thì bấm download tự động
+                web_driver.find_element(By.XPATH, 
+                                        '//*[@id="ui-tabpanel-0"]/div/div/div[4]/div/button[1]').click()
+                
+                # lớp phủ biến mất đi khi tải xong
+                WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div[2]')))
 
+                # Đợi thông báo lỗi không tải được và bấm tắt thông báo, nếu tải thành công thì lệnh này sẽ lỗi
+                WebDriverWait(web_driver, 3).until(EC.visibility_of_element_located((By.XPATH, 
+                                                                                "/html/body/app-root/app-main-layout/div/app-pre-file-statement/div[2]/div/app-payment-file-table/p-confirmdialog/div/div/div[1]/div/a"))).click()
           except: # nếu lỗi thì đã tải thành công
-            None
+            pass
 
         # Bấm nút ERP
         WebDriverWait(web_driver, 3).until(EC.visibility_of_element_located((By.XPATH, 

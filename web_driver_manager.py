@@ -273,23 +273,22 @@ class WebDriverManager:
         """Cập nhật nội dung của một đối tượng Label.
 
         Args:
-            window: Cửa sổ chính để cập nhật giao diện (window.update_idletasks).
-            label: Đối tượng label cần cập nhật.
             new_text: Nội dung mới để hiển thị.
             append (bool): Nếu True, nội dung mới sẽ được nối vào nội dung cũ.
                             Nếu False, nội dung cũ sẽ bị xóa và thay thế bằng nội dung mới.
                             Mặc định là True.
         """
-        if append:
-            # Nối nội dung mới vào nội dung hiện tại
-            current_text = self.label.cget("text")
-            updated_text = current_text + new_text
-            self.label.config(text=updated_text)
-        else:
-            # Thay thế hoàn toàn nội dung cũ
-            self.label.config(text=new_text)
+        if self.label and isinstance(self.label, tk.Label):
+            if append:
+                # Nối nội dung mới vào nội dung hiện tại
+                current_text = self.label.cget("text")
+                updated_text = current_text + new_text
+                self.label.config(text=updated_text)
+            else:
+                # Thay thế hoàn toàn nội dung cũ
+                self.label.config(text=new_text)
 
-        self.window.update_idletasks()
+            self.window.update_idletasks()
 
     def _find_file(self, file_name):
         """

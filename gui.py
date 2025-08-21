@@ -9,7 +9,7 @@ from tkinter import messagebox
 import os
 
 # Import các lớp cần thiết từ config_manager
-from config_manager import ConfigManager, SettingsWindow
+from config_manager import SettingsWindow
 
 # --- BƯỚC 2.2: THAY ĐỔI CHỮ KÝ HÀM ---
 # Thêm tham số `config` vào hàm
