@@ -16,6 +16,8 @@ import pywinauto
 from pathlib import Path
 
 from collections import defaultdict
+import time
+
 # Biến toàn cục 
 web_driver = None # Giữ instance của trình duyệt
 
@@ -200,11 +202,6 @@ def _perform_single_lookup(main_window, sub_window, label, config, single_invoic
         image = ImageGrab.grab()
         image.save(screenshot_path)
         
-        if main_window and is_reshow_main_window:
-            main_window.deiconify() # Hiện lại cửa sổ chính
-            main_window.attributes('-topmost', False)
-        elif sub_window: sub_window.deiconify()
-
         if messagebox.askyesno("Print Confirmation", "Lookup successful. Do you want to print?"):
             win32api.ShellExecute(
                 0,
@@ -214,6 +211,13 @@ def _perform_single_lookup(main_window, sub_window, label, config, single_invoic
                 ".",
                 0
             )
+
+        if main_window and is_reshow_main_window:
+            main_window.deiconify() # Hiện lại cửa sổ chính
+            main_window.attributes('-topmost', False)
+        elif sub_window: sub_window.deiconify()
+        else: time.sleep(30) # ở chế độ headless, đợi 30s để thao tác in xong rồi tắt
+
 
     except Exception as e:
         print(f"An error occurred in chon_file: {e}")

@@ -154,7 +154,7 @@ def web_open(window, label, config):
     df = pd.DataFrame(data, columns=column_names, index=selected_rows)
     df.fillna('', inplace=True)
 
-    utils.update_label(window, label, 'Data loaded from Excel!', False)
+    if window: utils.update_label(window, label, 'Data loaded from Excel!', False)
 
     # Bỏ đi chức năng chọn nhiều user
     # user, password = create_user_choose_gui(config) 
@@ -169,8 +169,10 @@ def web_open(window, label, config):
         web_driver = web_driver_manager.initialize_web_driver()
         if not web_driver: return # Dừng lại nếu khởi tạo thất bại
 
+    if window:
+        window.attributes('-topmost', False)
+
     login_url = 'http://10.17.69.56/dang-nhap'
-    window.attributes('-topmost', False)
     web_driver.get(login_url)
 
   # Đợi tối đa 30 giây cho đến khi trang tải hoàn toàn
@@ -216,7 +218,7 @@ def web_open(window, label, config):
 
             if not response:
                 messagebox.showerror("API Error", 'API limit reached or other error occurred.')
-                window.deiconify() # Hiện lại cửa sổ chính
+                if window: window.deiconify() # Hiện lại cửa sổ chính
                 break
 
             utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
@@ -268,7 +270,7 @@ def web_open(window, label, config):
         on_confirm_callback=callback
     )
     
-    window.mainloop()
+    # window.mainloop()
 
 
 # def create_write_web_gui(main_window, web_driver, rows):

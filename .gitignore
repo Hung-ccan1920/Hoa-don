@@ -30,3 +30,6 @@ config.txt
 
 # Thư mục model:
 /easyocr_model/
+
+# file keygen
+ssh-keygen

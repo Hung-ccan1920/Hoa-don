@@ -1,8 +1,9 @@
 import sys
 import main
 sys.argv = [
-    'main.py',       # Giả lập tên script
-    "TVTK 25BDCF-TA,0305094732,C25TPQ,52,3076513,41532923|TVTK 25BDCF-TU,0305094732,C25TPQ,51,3194174,43121344|TVTK 25TYCF-TR,0305094732,C25TPQ,53,2193189,29608054",        # Giả lập tham số 1
+    'main.py',       # Giả lập tên script,
+    "tab2",            # Giả lập tham số 1
+    "TVGS 25BDCF-TM,3401208233,C25TNL,121,560800,7570800",   # Giả lập tham số 2
 ]
 
 try:

@@ -1,5 +1,6 @@
 import utils
 import tab1
+import tab2
 from config_manager import ConfigManager
 from update_manager import UpdateManager
 
@@ -10,7 +11,7 @@ from tkinter import messagebox
 import threading
 import queue
 
-MAIN_CURRENT_VERSION = "3.2" 
+MAIN_CURRENT_VERSION = "3.3" 
 MAIN_GITHUB_REPO = "Hung-ccan1920/Hoa-don" 
 
 # Chỉ import và sử dụng pyi_splash khi chạy dưới dạng .exe
@@ -32,16 +33,19 @@ def main():
 
     # Check if a command-line argument was provided
     if len(sys.argv) > 1:
-        # The first argument (sys.argv[1]) is the full data string from VBA
-        input_string = sys.argv[1]
-        # Define the keys in the exact order they appear in the data string from VBA
-        # A, I, L, M, (K-J), K
-        keys = ["Goi", "MST", "KHHDon", "SHDon", "TgTThue", "TgTTTBSo"]
+        if "tab1" in sys.argv[1]:
+            # The first argument (sys.argv[1]) is the full data string from VBA
+            input_string = sys.argv[2]
+            # Define the keys in the exact order they appear in the data string from VBA
+            # A, I, L, M, (K-J), K
+            keys = ["Goi", "MST", "KHHDon", "SHDon", "TgTThue", "TgTTTBSo"]
 
-        # Process the string to get the defaultdict
-        processed_invoices = utils.process_data_from_vba(keys,input_string)
+            # Process the string to get the defaultdict
+            processed_invoices = utils.process_data_from_vba(keys,input_string)
 
-        tab1.lookup_invoices_interactive(None,None,config,processed_invoices)
+            tab1.lookup_invoices_interactive(None,None,config,processed_invoices)
+        elif "tab2" in sys.argv[1]:
+            tab2.web_open(None, None, config)
 
     else:
         update_manager = UpdateManager()
