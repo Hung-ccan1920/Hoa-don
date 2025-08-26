@@ -24,7 +24,7 @@ class ConfigManager:
     CONFIG_SCHEMA = {
         'excel_path': {
             'storage': 'json', 
-            'default': '', 
+            'default': 'Hóa đơn.xlsm', 
             'required': True, 
             'label': 'Excel File',
             'type': '*.xlsx *.xls *.xlsm'
