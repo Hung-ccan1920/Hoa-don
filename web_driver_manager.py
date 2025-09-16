@@ -132,7 +132,7 @@ class WebDriverManager:
             except Exception:
                 # 4.2 Nếu lỗi, mới dùng đến hàm tìm kiếm nâng cao
                 print("   -> Standard search failed. Trying advanced search...")
-                firefox_path = self.find_firefox_executable()
+                firefox_path = self._find_firefox_executable()
                 if not firefox_path:
                     raise ValueError("Could not automatically find Firefox installation path.")
                 

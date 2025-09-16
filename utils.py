@@ -515,7 +515,7 @@ def create_selection_gui(main_window, title, items_to_display, button_text, on_c
         """Hàm xử lý khi nút xác nhận được nhấn."""
         chosen_value = selected_value.get()
         # sub_window.withdraw()
-        on_confirm_callback(sub_window, chosen_value) # Gọi hàm callback với giá trị đã chọn
+        on_confirm_callback(chosen_value) # Gọi hàm callback với giá trị đã chọn
 
     confirm_button = ttk.Button(
         sub_window, 

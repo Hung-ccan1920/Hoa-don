@@ -4,6 +4,7 @@
 
 # Các file tạm của Python
 __pycache__/
+/.vscode/
 *.pyc
 
 # Thư mục môi trường ảo

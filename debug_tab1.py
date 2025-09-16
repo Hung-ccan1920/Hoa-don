@@ -14,4 +14,4 @@ except SystemExit as e:
 except Exception as e:
     print(f"\nAn uncaught exception occurred in updater: {e}")
 
-print("\n--- DEBUG SCRIPT FINISHED ---")
+print("\n--- DEBUG SCRIPT FINISHED ---") 

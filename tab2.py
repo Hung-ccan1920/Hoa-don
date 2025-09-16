@@ -1,10 +1,7 @@
 from web_driver_manager import WebDriverManager
-from ai_manager import AIManager
-from easyOCR_manager import EasyOCRManager
-
-import os
 import utils
 
+import os
 from collections import OrderedDict
 import pandas as pd
 
@@ -13,6 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import TimeoutException
 
 import tkinter as tk
 from tkinter import ttk
@@ -25,6 +23,12 @@ import xlwings as xw
 from pathlib import Path
 
 from collections import defaultdict
+
+import cv2
+import numpy as np
+import random
+
+import pyautogui
 
 # --- Biến toàn cục ---
 HD_info_list = defaultdict()
@@ -175,79 +179,22 @@ def web_open(window, label, config):
     login_url = 'http://10.17.69.56/dang-nhap'
     web_driver.get(login_url)
 
+    script = "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    web_driver.execute_script(script)
+
   # Đợi tối đa 30 giây cho đến khi trang tải hoàn toàn
     WebDriverWait(web_driver, 10).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
     # Kiểm tra user và password để nhập, và kiểm tra đã được đăng nhập chưa
     if user and password and web_driver.current_url == login_url:
-        ai_manager = AIManager(config.get('API_KEY')) 
-        is_try_OCR = True # Biến theo dõi chỉ thử OCR 1 lần nếu thất bại
-        # Khởi tạo EasyOCR
-        easyOCR = EasyOCRManager(['en'],'easyocr_model',False)
-
-        # model_directory = os.path.join(utils.get_app_path(), 'easyocr_model')
-        # reader = easyocr.Reader(['en'], model_storage_directory=model_directory, gpu=False)
-
         WebDriverWait(web_driver, 10).until(EC.presence_of_element_located(
         (By.CSS_SELECTOR, 'body > app-root > ng-component > div > div > div > div > form > div:nth-child(1) > input'))).send_keys(user)
 
         web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[2]/input').send_keys(password)
 
-        # Vòng lặp giải captcha
-        while True:
-            web_element = WebDriverWait(web_driver, 10).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[2]/img')))
-
-            captcha_path = config.get_temp_file_path('captcha.png')
-            web_element.screenshot(captcha_path)
-
-            if is_try_OCR:
-                is_try_OCR = False
-                result = easyOCR.process_image(captcha_path)
-                response = ''.join([res[1] for res in result]).strip()
-
-                if not response or len(response) < 4: # Nếu kết quả không đạt, chạy lại vòng lặp
-                    continue
-                print(f"Captcha OCR result: {response}")
-            else:   
-                response = ai_manager.generate_from_image(
-                    "Extract all characters from this image (this is a captcha code). Return only the character string, say nothing more.",
-                    [captcha_path]
-                ).strip()
-
-                print(f"Captcha AI result: {response}")
-
-            if not response:
-                messagebox.showerror("API Error", 'API limit reached or other error occurred.')
-                if window: window.deiconify() # Hiện lại cửa sổ chính
+        for _ in range(3):  # Thử đăng nhập tối đa 3 lần
+            if solve_puzzle_captcha(web_driver, config):
                 break
-
-            utils.web_write(web_driver, By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[3]/div/div[1]/input', response)
-
-            web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
-
-            try:
-                web_driver.find_element(By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/form/div[4]/button').click()
-                # đợi spinner tắt
-                WebDriverWait(web_driver, 10).until(EC.invisibility_of_element_located((By.XPATH, '/html/body/app-root/ngx-spinner/div/div/p')))
-                # Đợi nút thoát ở màn hình sau khi đăng nhập thành công
-                WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/app-landing-page/div/div[1]/a')))
-                is_try_OCR = True # Đặt lại giá trị để sử dụng lần sau
-                break # Thoát khỏi vòng lặp nếu thành công
-            except:      
-                try:
-                    # Kiểm tra thông báo lỗi
-                    error_message = WebDriverWait(web_driver, 1).until(EC.visibility_of_element_located((By.XPATH, '/html/body/app-root/ng-component/div/div/div/div/div[2]'))).text
-                    # Nếu là lỗi đăng nhập, thoát khỏi hàm
-                    if "đăng nhập" in error_message.lower():
-                        break
-                    else:
-                        continue # Nếu không phải lỗi đăng nhập, tiếp tục vòng lặp để thử lại captcha
-                except:
-                    break # Nếu không có thông báo lỗi, thoát khỏi vòng lặp
-
-    # Mở màn hình chọn dòng để update thong tin vao web
-    # create_write_web_gui(window, web_driver, selected_rows)
-    # is_sub_window_open = True
 
     # 1. Chuẩn bị danh sách items theo đúng định dạng yêu cầu
     items = []
@@ -259,7 +206,7 @@ def web_open(window, label, config):
 
     # 2. Định nghĩa hàm callback (hàm sẽ làm gì sau khi người dùng chọn)
     #    Hàm data_insert cần web_driver, ta dùng lambda để truyền nó vào.
-    callback = lambda sub_window, selected_row: data_insert(web_driver, sub_window, selected_row)
+    callback = lambda selected_row: data_insert(web_driver, selected_row)
 
     # 3. Gọi hàm tạo giao diện chung
     utils.create_selection_gui(
@@ -269,57 +216,7 @@ def web_open(window, label, config):
         button_text="Cập nhật",
         on_confirm_callback=callback
     )
-    
-    # window.mainloop()
 
-
-# def create_write_web_gui(main_window, web_driver, rows):
-#     """
-#     Tạo giao diện dark mode với các cặp radio button và label, 
-#     và nút "Cập nhật" ở dưới cùng.
-
-#     Args:
-#         rows (list): Danh sách các số dòng.
-#     """
-#     main_window.withdraw()
-
-#     sub_window = tk.Toplevel()  # Sử dụng Toplevel để tạo cửa sổ con
-#     sub_window.title("Ghi thông tin vào Web TT")
-#     utils.center_window(sub_window, 200, 75 + len(rows) * 40)
-
-#     # Thiết lập dark mode
-#     sub_window.configure(bg="#2e2e2e")
-#     style = ttk.Style()
-#     style.theme_use('clam')
-#     style.configure(".", background="#2e2e2e", foreground="white")
-#     style.configure("TRadiobutton", background="#2e2e2e", foreground="white", font=("Arial", 10))
-#     style.configure("TButton", background="#444444", foreground="white", font=("Arial", 10, "bold"))
-#     style.map("TButton",
-#               background=[("active", "#555555"), ("pressed", "#333333")])
-
-#     # Biến để lưu giá trị của radio button được chọn
-#     selected_row = tk.IntVar(value=rows[0])
-
-#     # Tạo frame chứa các radio button và label
-#     frame_radio = ttk.Frame(sub_window)
-#     frame_radio.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
-
-#     # Tạo các cặp radio button và label
-#     for i, row in enumerate(rows):
-#         radio_button = ttk.Radiobutton(frame_radio, text=f"Dòng {row}", variable=selected_row, value=row)
-#         radio_button.grid(row=i, column=0, sticky="w", padx=5, pady=5)
-
-#         label = ttk.Label(frame_radio, text=df.at[row, 'A'])
-#         label.grid(row=i, column=1, sticky="w")
-
-#     # Tạo nút "Cập nhật"
-#     update_button = ttk.Button(sub_window, text="Cập nhật", style="TButton", command= lambda: data_insert(web_driver, str(selected_row.get())))
-#     update_button.grid(row=1, column=0, pady=10, padx=5, sticky="ew")
-
-#     # Gắn hàm on_closing với sự kiện đóng cửa sổ
-#     sub_window.protocol("WM_DELETE_WINDOW", lambda: on_closing(main_window, sub_window))
-
-#     sub_window.mainloop()
 
 def on_closing(main_window, sub_window):
   global is_sub_window_open
@@ -406,7 +303,7 @@ def create_user_choose_gui(config):
 
     return username, password  # Trả về user và password sau khi cửa sổ đóng
 
-def data_insert(web_driver, sub_window, row):
+def data_insert(web_driver, row):
   '''Điền thông tin vào web
     row: index dòng
   '''
@@ -567,7 +464,159 @@ def data_insert(web_driver, sub_window, row):
       except Exception as e:
         messagebox.showerror('Lỗi',e)
 
+def find_drag_offset(background_image_path):
+    pixel_count_threshold = 27  # Số pixel màu trắng để đếm
+    color_threshold = 210       # Ngưỡng màu để tạo ảnh đen/trắng
+    scale = 1/0.93808           # Điều chỉnh distance theo tỉ lệ
+    offset = -5                # Điều chỉnh offset
 
+    # output_dir = "debug_images"
+    # os.makedirs(output_dir, exist_ok=True)
 
-  
+    try:
+        # --- BƯỚC 1: Đọc ảnh và chuyển sang ảnh xám ---
+        background_img = cv2.imread(background_image_path)
+        if background_img is None:
+            print("Error: Could not read the background image.")
+            return None
+            
+        gray_img = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+        # cv2.imwrite(os.path.join(output_dir, "step1_grayscale.png"), gray_img)
+        # print("Saved: step1_grayscale.png")
 
+        # --- BƯỚC 2: Áp dụng Phân ngưỡng Nhị phân để tạo ảnh đen/trắng ---
+        _, binary_img = cv2.threshold(gray_img, color_threshold, 255, cv2.THRESH_BINARY)
+        # cv2.imwrite(os.path.join(output_dir, "step2_binary.png"), binary_img)
+        # print("Saved: step2_binary.png")
+        
+        # --- BƯỚC 3: Quét ảnh từ trái sang phải để tìm cạnh ---
+        height, width = binary_img.shape
+        
+        # Bỏ qua vị trí của miếng ghép ban đầu
+        start_x = 66 
+        
+        print(f"Scanning image from x={start_x} to x={width}...")
+        
+        # Lặp qua từng cột pixel theo chiều rộng
+        for x in range(start_x, width):
+            # Lấy ra một dải ảnh dọc tại vị trí x
+            vertical_strip = binary_img[:, x]
+            
+            # Đếm số pixel trắng (giá trị > 0) trong dải ảnh đó
+            white_pixel_count = np.count_nonzero(vertical_strip)
+            
+            # In ra để theo dõi 
+            # if white_pixel_count > 10: print(f"Column x={x}, White Pixels={white_pixel_count}")
+
+            # Nếu số pixel trắng vượt ngưỡng, chúng ta đã tìm thấy cạnh
+            if white_pixel_count >= pixel_count_threshold:
+                print(f"--> Edge found at x = {x} with {white_pixel_count} white pixels (threshold was {pixel_count_threshold}).")
+                
+                # Vẽ một đường thẳng đỏ lên ảnh gốc để đánh dấu vị trí tìm được
+                cv2.line(background_img, (x, 0), (x, height), (0, 0, 255), 2)
+                # cv2.imwrite(os.path.join(output_dir, "step3_result.png"), background_img)
+                # print("Saved: step3_result.png with the detected edge.")
+
+                return x * scale + offset
+        
+        print("Could not find any vertical edge matching the threshold.")
+        return None
+
+    except Exception as e:
+        print(f"An error occurred during image processing: {e}")
+        return None
+
+def solve_puzzle_captcha(driver, config):
+    """Hàm tổng hợp các bước để giải captcha.""" 
+    try:
+        # --- 1. Lấy hình ảnh ---
+        background_selector = "body > app-root > ng-component > div > div > div > div > form > app-ngx-slider-recaptcha > div > canvas.canvas" 
+        slider_handle_selector = "body > app-root > ng-component > div > div > div > div > form > app-ngx-slider-recaptcha > div > div > div > div" 
+        slider_container_selector = "body > app-root > ng-component > div > div > div > div > form > app-ngx-slider-recaptcha > div > div"
+       
+        print("Capturing captcha images...")
+        background_path = config.get_temp_file_path('bg.png')
+        driver.find_element(By.CSS_SELECTOR, background_selector).screenshot(background_path)
+
+        # --- 2. Tính toán khoảng cách ---
+        distance = find_drag_offset(background_path)
+        if distance is None:
+            print("Could not calculate drag distance.")
+            return False
+        
+        print(f"Calculated drag distance: {distance}px")
+
+        slider_handle_element = driver.find_element(By.CSS_SELECTOR, slider_handle_selector)
+        slider_container_element = driver.find_element(By.CSS_SELECTOR, slider_container_selector)
+
+        # 1. Lấy vị trí và kích thước của núm trượt trên màn hình
+        location = slider_handle_element.location
+        size = slider_handle_element.size
+        
+        # Tính toán điểm bắt đầu (ở giữa núm trượt)
+        start_x = location['x'] + size['width']/2
+        start_y = location['y'] + driver.find_element(By.CSS_SELECTOR, background_selector).size['height'] # Cộng thêm chiều cao của ảnh
+
+        drag_with_real_mouse(start_x, start_y, distance)  
+
+        time.sleep(2)  # Chờ 2 giây để tránh kiểm tra quá sớm
+        
+        if 'success' in slider_container_element.get_attribute('class'):
+            print("✅ Slider captcha solved successfully!")
+            return True
+        else:
+            print("❌ Slider captcha failed (Incorrect position).")
+            return False
+    except TimeoutException:
+        print("❌ Slider captcha failed (Verification timed out).")
+        return False
+    except Exception as e:
+        print(f"❌ An error occurred during captcha solving: {e}")
+        return False
+
+def drag_with_real_mouse(start_x, start_y, distance):
+    """
+    Điều khiển con trỏ chuột thật của hệ thống để thực hiện kéo thả.
+
+    Args:
+        driver: Đối tượng WebDriver.
+        slider_element: Element của núm trượt.
+        distance (int): Khoảng cách cần kéo.
+    """
+    try:
+        # 2. Di chuyển con trỏ chuột thật đến điểm bắt đầu
+        pyautogui.moveTo(start_x, start_y, duration=0.2) # Di chuyển trong 0.2 giây
+
+        # 3. Nhấn và giữ chuột trái
+        pyautogui.mouseDown()
+        
+        # 4. Di chuyển chuột đến một khoảng cách `distance`
+        # --- Tạo quỹ đạo di chuyển không theo đường thẳng ---
+        current_x, current_y = pyautogui.position()
+        target_x = current_x + distance
+        
+        # Chia quãng đường thành nhiều đoạn nhỏ
+        num_steps = random.randint(15, 25)
+        
+        for i in range(1, num_steps + 1):
+            # Tính toán vị trí tiếp theo trên một đường cong (ease-in-out)
+            t = i / num_steps
+            eased_t = t * t * (3 - 2 * t) # Công thức ease-in-out
+            
+            x = current_x + (eased_t * distance)
+            
+            # Thêm một chút "nhiễu" theo trục y để trông giống người hơn
+            y = current_y + random.uniform(-3, 3) 
+            
+            # Di chuyển đến điểm tiếp theo với thời gian ngẫu nhiên
+            pyautogui.moveTo(x, y, duration=random.uniform(0.01, 0.03))
+
+        # Đảm bảo con trỏ đến đúng vị trí cuối cùng
+        pyautogui.moveTo(target_x, current_y, duration=0.1)
+        # 5. Thả chuột trái ra
+        pyautogui.mouseUp()
+        
+        return True
+    except Exception as e:
+        print(f"An error occurred during real mouse drag: {e}")
+        return False
