@@ -11,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.action_chains import ActionChains
 
 import tkinter as tk
 from tkinter import ttk
@@ -549,17 +550,20 @@ def solve_puzzle_captcha(driver, config):
         slider_handle_element = driver.find_element(By.CSS_SELECTOR, slider_handle_selector)
         slider_container_element = driver.find_element(By.CSS_SELECTOR, slider_container_selector)
 
-        # 1. Lấy vị trí và kích thước của núm trượt trên màn hình
-        location = slider_handle_element.location
-        size = slider_handle_element.size
+        # # 1. Lấy vị trí và kích thước của núm trượt trên màn hình
+        # location = slider_handle_element.location
+        # size = slider_handle_element.size
         
-        # Tính toán điểm bắt đầu (ở giữa núm trượt)
-        start_x = location['x'] + size['width']/2
-        start_y = location['y'] + driver.find_element(By.CSS_SELECTOR, background_selector).size['height'] # Cộng thêm chiều cao của ảnh
+        # # Tính toán điểm bắt đầu (ở giữa núm trượt)
+        # start_x = location['x'] + size['width']/2
+        # start_y = location['y'] + driver.find_element(By.CSS_SELECTOR, background_selector).size['height'] # Cộng thêm chiều cao của ảnh
+        # print(f"Slider handle position on screen: ({start_x}, {start_y})")
+
+        start_x, start_y = find_element_screen_position(config, slider_handle_element)
 
         drag_with_real_mouse(start_x, start_y, distance)  
 
-        time.sleep(2)  # Chờ 2 giây để tránh kiểm tra quá sớm
+        time.sleep(1.5)  # Chờ 1.5 giây để tránh kiểm tra quá sớm
         
         if 'success' in slider_container_element.get_attribute('class'):
             print("✅ Slider captcha solved successfully!")
@@ -620,3 +624,35 @@ def drag_with_real_mouse(start_x, start_y, distance):
     except Exception as e:
         print(f"An error occurred during real mouse drag: {e}")
         return False
+    
+def find_element_screen_position(config, element):
+    """
+    Tìm tọa độ chính xác trên màn hình của element Selenium.
+    Trả về (x, y) trung tâm element.
+    """
+    # Screenshot toàn màn hình
+    screen_path = config.get_temp_file_path("screen.png")
+    screen = pyautogui.screenshot()
+    screen.save(screen_path)
+
+    # Screenshot element
+    element_path = config.get_temp_file_path("element.png")
+    element.screenshot(element_path)
+
+    # Đọc ảnh
+    img_rgb = cv2.imread(screen_path)
+    template = cv2.imread(element_path)
+
+    # So khớp ảnh
+    result = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
+    _, _, _, max_loc = cv2.minMaxLoc(result)
+
+    # Vị trí góc trên trái
+    top_left = max_loc
+    w, h = template.shape[1], template.shape[0]
+
+    # Tọa độ trung tâm element
+    center_x = top_left[0] + w // 2
+    center_y = top_left[1] + h // 2
+
+    return center_x, center_y
